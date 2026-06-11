@@ -1,0 +1,26 @@
+# To-Do
+- [ ] Código do gerenciador (fazendo)
+    - [ ] Enviar ACK (fazendo)
+    - [ ] Receber SEND_DATA
+    - [ ] Responder ACK_DATA
+    - [ ] Receber ACK_COMMAND
+    - [ ] Enviar SEND_COMMAND (com repetição e delay com backoff exponencial)
+    - [ ] Enviar SEND_DATA (com repetição e delay com backoff exponencial)
+    - [ ] Receber REQUEST_DATA
+- [ ] Código do sensor
+    - [ ] Enviar DISCOVER (com repetição e delay com backoff exponencial)
+    - [ ] Receber OFFER
+    - [ ] Enviar SYN (com repetição e delay com backoff exponencial)
+    - [ ] Receber ACK
+    - [ ] Enviar SEND_DATA (com repetição e delay com backoff exponencial)
+    - [ ] Receber ACK_DATA
+- [ ] Código do atuador
+    - [ ] Receber SEND_COMMAND
+    - [ ] Enviar ACK_COMMAND
+- [ ] Código cliente
+    - [ ] Enviar REQUEST_DATA (com repetição e delay com backoff exponencial)
+- [ ] Código da sala
+    - [ ] Declarar sensores, gerenciador, atuadores
+    - [ ] Simular entrada de alunos
+    - [ ] Simular chave de ON/OFF
+- [ ] Documentar todas as funções

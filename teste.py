@@ -57,7 +57,10 @@ def executar_sensor():
         print("[TCP] Túnel estabelecido!")
 
         # Envia a mensagem SYN da sua aplicação
-        mensagem_syn = '1|123.123.123.123:3000|123.123.123.123:3001|1|{"type": 1}'
+        # {"NROALUNO": "14331911", "NOME": "Pedro"}
+        # {"NROALUNO": "14331918", "NOME": "Augusto"}
+        # {"DATE": "2026-06-12"}
+        mensagem_syn = '9|123.123.123.123:3000|123.123.123.123:3001|1|{"DATE": "2026-06-12"}'
         print(f"[TCP] Enviando Handshake: '{mensagem_syn}'")
         sensor_tcp.sendall(mensagem_syn.encode('utf-8'))
 
@@ -65,6 +68,7 @@ def executar_sensor():
         resposta = sensor_tcp.recv(1024)
         if resposta:
             print(f"[TCP] Resposta do Gerenciador recebida: {resposta.decode('utf-8')}")
+            sensor_tcp.sendall("10|123.123.123.123:3000|123.123.123.123:3001|1".encode("utf-8"))
             print("\n--- SENSOR AUTENTICADO E PRONTO PARA ENVIAR DADOS! ---")
         else:
             print("[TCP] A conexão foi fechada pelo Gerenciador sem resposta.")

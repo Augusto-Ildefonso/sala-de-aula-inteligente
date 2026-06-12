@@ -28,7 +28,7 @@ class Header:
         """
         return f"{self.tipo_primitiva}\n{self.id_rem}\n{self.id_dest}\n{self.tam}"
     
-    def to_bytes(self):
+    def to_bytes(self) -> bytes:
         """Método para converter o objeto Header em bytes.
         
         Converte o objeto e seus atributos para bytes, usando o separador |.
@@ -37,4 +37,14 @@ class Header:
             bytes: Atributos do objeto separados por | em bytes.
         """
         return f"{str(self.tipo_primitiva)}|{self.id_rem}|{self.id_dest}|{str(self.tam)}".encode("utf-8")
+    
+    def to_string(self) -> str:
+        """Método para converter o objeto Header em string.
+        
+        Converte o objeto e seus atributos para string, usando o separador |.
+
+        Returns:
+            string: Atributos do objeto separados por | em string.
+        """
+        return f"{str(self.tipo_primitiva)}|{self.id_rem}|{self.id_dest}|{str(self.tam)}"
     

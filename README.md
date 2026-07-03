@@ -109,15 +109,3 @@ python3 sala_de_aula.py
 ```
 
 O programa guiará você pela configuração interativa e pela escolha do modo de simulação.
-
-### Executar apenas o gerenciador (para testes manuais)
-
-```bash
-make gerenciador
-# ou
-python3 gerenciador.py
-```
-
-### Testes
-
-O projeto não possui suíte de testes automatizada. A validação é feita via simulação (`sala_de_aula.py`) nos modos aleatório e controlado, que exercitam todos os requisitos funcionais.

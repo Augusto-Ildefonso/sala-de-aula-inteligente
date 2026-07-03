@@ -1,14 +1,14 @@
 # To-Do
-- [ ] Código do gerenciador (fazendo)
+- [X] Código do gerenciador
     - [X] Enviar ACK
     - [X] Receber SEND_DATA
     - [X] Responder ACK_DATA
-    - [ ] Enviar SEND_COMMAND (com repetição e delay com backoff exponencial)
-    - [ ] Receber ACK_COMMAND
+    - [X] Enviar SEND_COMMAND (com repetição e delay com backoff exponencial)
+    - [X] Receber ACK_COMMAND
     - [X] Enviar SEND_DATA (com repetição e delay com backoff exponencial)
     - [X] Receber ACK_DATA
     - [X] Receber REQUEST_DATA
-    - [ ] Arrumar a contagem de tamanho do header
+    - [X] Arrumar a contagem de tamanho do header
 - [ ] Código do sensor
     - [ ] Enviar DISCOVER (com repetição e delay com backoff exponencial)
     - [ ] Receber OFFER

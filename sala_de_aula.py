@@ -1,13 +1,16 @@
+import socket
 import subprocess
 import multiprocessing
 import sys
 import os
 import time
-import random
+
 
 from sensor import Sensor
 from atuador import Atuador
 from cliente import Cliente
+from header import Header
+from global_vars import GERENCIADOR, GERENCIADOR_PORT_TCP, HEADER_SIZE
 
 
 SENSOR_TYPES = {
@@ -59,7 +62,7 @@ def _sensor_process(sensor_id: str, sensor_type: int, cmd_queue: multiprocessing
             print(f"[Erro-{sensor_id}]: {e}")
 
 
-def _actuator_process(actuator_id: str, actuator_type: int):
+def _actuator_process(actuator_id: str, actuator_type: int, state_shared):
     """Processo filho que executa um atuador.
 
     Cria a instancia do Atuador e mantem o processo vivo para que
@@ -68,8 +71,9 @@ def _actuator_process(actuator_id: str, actuator_type: int):
     Args:
         actuator_id: Identificador unico do atuador (ex: "atuador_1").
         actuator_type: Tipo do atuador (4=iluminacao, 5=projetor, 6=ar_condicionado).
+        state_shared: multiprocessing.Value compartilhado para estado.
     """
-    Atuador(actuator_type)
+    Atuador(actuator_type, state_shared)
     print(f"[Sala] Atuador {actuator_id} ({ACTUATOR_TYPE_NAMES[actuator_type]}) pronto.")
     while True:
         time.sleep(1)
@@ -213,12 +217,14 @@ class SalaDeAula:
 
         for aid, at, an in self.actuator_configs:
             print(f"Iniciando {aid} ({an})...")
+            state_shared = multiprocessing.Value('i', 0)
             p = multiprocessing.Process(
-                target=_actuator_process, args=(aid, at), daemon=True
+                target=_actuator_process, args=(aid, at, state_shared), daemon=True
             )
             p.start()
             self.actuator_procs[aid] = {
                 "process": p, "type": at, "name": an,
+                "state_shared": state_shared,
             }
 
         if self.has_client:
@@ -233,9 +239,6 @@ class SalaDeAula:
 
         print("\nAguardando conexao dos componentes...")
         time.sleep(3)
-        print("\n============================================================")
-        print("         TODOS OS COMPONENTES INICIADOS")
-        print("============================================================")
 
     def cleanup(self):
         """Finaliza todos os processos."""
@@ -279,233 +282,291 @@ class SalaDeAula:
             "action": "send_data", "data": data,
         })
 
-    def _executar_presenca_detectada(self, sid: str):
-        """Sensor de presenca: detecta pessoas na sala (Req 3.2)."""
-        tipo = SENSOR_TYPE_NAMES.get(self.sensor_procs[sid]["type"], "?")
-        print(f"\n[Acao] Sensor {sid} ({tipo}): detectar pessoas na sala")
-        self._send_sensor(sid, {"EMPTY": 0})
-        print("[Resultado Esperado] Gerenciador liga iluminacao e ar condicionado (Req 3.2)")
+    # ----------------------------------------------------------------
+    # Utilitarios de requisitos
+    # ----------------------------------------------------------------
 
-    def _executar_presenca_vazia(self, sid: str):
-        """Sensor de presenca: sala vazia (Req 3.3 - inicio do timer)."""
-        tipo = SENSOR_TYPE_NAMES.get(self.sensor_procs[sid]["type"], "?")
-        print(f"\n[Acao] Sensor {sid} ({tipo}): sala vazia")
-        self._send_sensor(sid, {"EMPTY": 1})
-        print("[Resultado Esperado] Gerenciador inicia timer de 15 minutos (Req 3.3)")
+    def _find_sensors(self, sensor_type: int) -> list[str]:
+        return [sid for sid, info in self.sensor_procs.items() if info["type"] == sensor_type]
 
-    def _executar_leitor(self, sid: str, nome: str, nro: str):
-        """Leitor de cartao: registra presenca de aluno (Req 3.6)."""
-        tipo = SENSOR_TYPE_NAMES.get(self.sensor_procs[sid]["type"], "?")
-        print(f"\n[Acao] Sensor {sid} ({tipo}): registrar presenca - {nome} ({nro})")
-        self._send_sensor(sid, {"NROALUNO": nro, "NOME": nome})
-        print("[Resultado Esperado] Gerenciador salva aluno na lista de presenca (Req 3.6)")
+    def _find_actuators(self, actuator_type: int) -> list[str]:
+        return [aid for aid, info in self.actuator_procs.items() if info["type"] == actuator_type]
 
-    def _executar_chave(self, sid: str, estado: int):
-        """Chave do projetor: liga/desliga (Req 3.4 e 3.5)."""
-        tipo = SENSOR_TYPE_NAMES.get(self.sensor_procs[sid]["type"], "?")
-        label = "ligar" if estado else "desligar"
-        print(f"\n[Acao] Sensor {sid} ({tipo}): {label} chave do projetor")
-        self._send_sensor(sid, {"STATUS": estado})
-        if estado:
-            print("[Resultado Esperado] Gerenciador apaga luzes e liga projetor (Req 3.4)")
-        else:
-            print("[Resultado Esperado] Gerenciador liga luzes e desliga projetor (Req 3.5)")
+    def _select_sensors(self, sensor_type: int) -> list[str]:
+        sensors = self._find_sensors(sensor_type)
+        if not sensors:
+            return []
+        if len(sensors) == 1:
+            return sensors
 
-    def _executar_cliente(self, data: str):
-        """Cliente requisita lista de presenca (Req 3.8 / 4)."""
-        print(f"\n[Acao] Cliente: requisitar lista de presenca para {data}")
+        nome = SENSOR_TYPE_NAMES.get(sensor_type, f"tipo {sensor_type}")
+        print(f"\nMultiplos sensores de {nome} disponiveis:")
+        for i, sid in enumerate(sensors, 1):
+            print(f"  {i}. {sid}")
+        print(f"  {len(sensors)+1}. Todos")
+        while True:
+            try:
+                choice = int(input("Escolha qual sensor enviar o dado: "))
+                if 1 <= choice <= len(sensors):
+                    return [sensors[choice-1]]
+                elif choice == len(sensors)+1:
+                    return sensors
+                print(f"Escolha entre 1 e {len(sensors)+1}.")
+            except ValueError:
+                print("Entrada invalida.")
+
+    def _tem_sensor(self, sensor_type: int) -> bool:
+        return len(self._find_sensors(sensor_type)) > 0
+
+    def _tem_atuador(self, actuator_type: int) -> bool:
+        return len(self._find_actuators(actuator_type)) > 0
+
+    def _get_actuator_states(self) -> dict[int, int]:
+        states = {}
+        for info in self.actuator_procs.values():
+            atype = info["type"]
+            shared = info["state_shared"]
+            states[atype] = shared.value
+        return states
+
+    def _estado_str(self, state: int) -> str:
+        return "ligado" if state else "desligado"
+
+    # ----------------------------------------------------------------
+    # Simulacao dos Requisitos
+    # ----------------------------------------------------------------
+
+    def _req_3_2(self):
+        print("\n" + "="*60)
+        print("REQUISITO 3.2 - Presenca detectada na sala")
+        print("="*60)
+        print()
+
+        sensors = self._select_sensors(0)
+        if not sensors:
+            print("[ERRO] Nenhum sensor de presenca configurado.")
+            return
+        if not self._tem_atuador(4):
+            print("[ERRO] Nenhum sistema de iluminacao configurado.")
+            return
+        if not self._tem_atuador(6):
+            print("[ERRO] Nenhum ar condicionado configurado.")
+            return
+
+        for sid in sensors:
+            print(f"[Sensor de Presenca] Detectou pessoas na sala")
+            self._send_sensor(sid, {"EMPTY": 0})
+            time.sleep(0.5)
+        time.sleep(2)
+
+    def _req_3_3(self):
+        print("\n" + "="*60)
+        print("REQUISITO 3.3 - Sala vazia (timer de 15 minutos)")
+        print("="*60)
+        print()
+
+        sensors = self._select_sensors(0)
+        if not sensors:
+            print("[ERRO] Nenhum sensor de presenca configurado.")
+            return
+        if not self._tem_atuador(4):
+            print("[ERRO] Nenhum sistema de iluminacao configurado.")
+            return
+        if not self._tem_atuador(5):
+            print("[ERRO] Nenhum projetor configurado.")
+            return
+        if not self._tem_atuador(6):
+            print("[ERRO] Nenhum ar condicionado configurado.")
+            return
+
+        for sid in sensors:
+            print(f"[Sensor de Presenca] Sala vazia")
+            self._send_sensor(sid, {"EMPTY": 1})
+            time.sleep(0.5)
+        print("[Sala] Aguardando timer de desligamento...")
+        time.sleep(6)
+
+    def _req_3_4(self):
+        print("\n" + "="*60)
+        print("REQUISITO 3.4 - Ligar chave do projetor")
+        print("="*60)
+        print()
+
+        sensors = self._select_sensors(2)
+        if not sensors:
+            print("[ERRO] Nenhuma chave do projetor configurada.")
+            return
+        if not self._tem_atuador(4):
+            print("[ERRO] Nenhum sistema de iluminacao configurado.")
+            return
+        if not self._tem_atuador(5):
+            print("[ERRO] Nenhum projetor configurado.")
+            return
+
+        for sid in sensors:
+            print(f"[Chave do Projetor] Ligou a chave")
+            self._send_sensor(sid, {"STATUS": 1})
+            time.sleep(0.5)
+        time.sleep(2)
+
+    def _req_3_5(self):
+        print("\n" + "="*60)
+        print("REQUISITO 3.5 - Desligar chave do projetor")
+        print("="*60)
+        print()
+
+        sensors = self._select_sensors(2)
+        if not sensors:
+            print("[ERRO] Nenhuma chave do projetor configurada.")
+            return
+        if not self._tem_atuador(4):
+            print("[ERRO] Nenhum sistema de iluminacao configurado.")
+            return
+        if not self._tem_atuador(5):
+            print("[ERRO] Nenhum projetor configurado.")
+            return
+
+        for sid in sensors:
+            print(f"[Chave do Projetor] Desligou a chave")
+            self._send_sensor(sid, {"STATUS": 0})
+            time.sleep(0.5)
+        time.sleep(2)
+
+    def _req_3_6(self):
+        print("\n" + "="*60)
+        print("REQUISITO 3.6 - Registro de presenca do aluno")
+        print("="*60)
+        print()
+
+        sensors = self._select_sensors(1)
+        if not sensors:
+            print("[ERRO] Nenhum leitor de cartao configurado.")
+            return
+
+        print("Alunos disponiveis:")
+        for i, (nome, nro) in enumerate(STUDENTS, 1):
+            print(f"  {i}. {nome} ({nro})")
+
+        try:
+            idx = int(input("\nEscolha o aluno (1-5): ")) - 1
+            if not (0 <= idx < len(STUDENTS)):
+                print("Opcao invalida, usando primeiro aluno.")
+                idx = 0
+        except ValueError:
+            print("Entrada invalida, usando primeiro aluno.")
+            idx = 0
+
+        nome, nro = STUDENTS[idx]
+        nome_input = input(f"Nome (Enter para '{nome}'): ").strip()
+        nro_input = input(f"Numero (Enter para '{nro}'): ").strip()
+        nome_final = nome_input if nome_input else nome
+        nro_final = nro_input if nro_input else nro
+
+        for sid in sensors:
+            self._send_sensor(sid, {"NROALUNO": nro_final, "NOME": nome_final})
+            print(f"\n[Leitor de Cartao] Aluno {nome_final} ({nro_final}) bateu o cartao")
+            time.sleep(0.5)
+
+    def _req_3_7(self):
+        print("\n" + "="*60)
+        print("REQUISITO 3.7 - Rotina de encerramento as 23h")
+        print("="*60)
+        print()
+
+        if not self._tem_atuador(4):
+            print("[ERRO] Nenhum sistema de iluminacao configurado.")
+            return
+        if not self._tem_atuador(5):
+            print("[ERRO] Nenhum projetor configurado.")
+            return
+        if not self._tem_atuador(6):
+            print("[ERRO] Nenhum ar condicionado configurado.")
+            return
+
+        print("[Gerenciador] Relogio interno marcou 23:00")
+        print()
+
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.connect((GERENCIADOR, GERENCIADOR_PORT_TCP))
+            local_addr = sock.getsockname()
+            header = Header(12, local_addr, (GERENCIADOR, GERENCIADOR_PORT_TCP), HEADER_SIZE).to_bytes()
+            sock.sendall(header)
+            sock.close()
+        except Exception as e:
+            print(f"[ERRO] Falha ao comunicar com o gerenciador: {e}")
+            return
+
+        time.sleep(3)
+
+    def _req_3_8(self):
+        print("\n" + "="*60)
+        print("REQUISITO 3.8/4 - Cliente requisita lista de presenca")
+        print("="*60)
+        print()
+
+        if not self.has_client or not self.client_queue:
+            print("[ERRO] Cliente nao configurado.")
+            return
+
+        data = input("Data (YYYY-MM-DD) [Enter para hoje]: ").strip()
+        if not data:
+            data = time.strftime("%Y-%m-%d")
+
         self.client_queue.put({"action": "request_data", "date": data})
-        print("[Resultado Esperado] Gerenciador retorna lista de alunos presentes (Req 3.8/4)")
-
-    def _executar_timeout(self):
-        """Simula o timeout de 15 minutos apos sala vazia (Req 3.3)."""
-        print("\n[Acao] Simular timeout de 15 minutos (sala vazia)")
-        print("[Resultado Esperado] Gerenciador desliga iluminacao, projetor e ar condicionado (Req 3.3)")
-
-    def _executar_shutdown_23h(self):
-        """Simula o desligamento geral das 23h (Req 3.7)."""
-        print("\n[Acao] Simular desligamento das 23h")
-        print("[Resultado Esperado] Gerenciador desliga todos os equipamentos (Req 3.7)")
+        print(f"\n[Cliente] Requisitou lista de presenca para {data}")
+        time.sleep(0.5)
 
     # ----------------------------------------------------------------
-    # Modo aleatorio
+    # Menu de Requisitos
     # ----------------------------------------------------------------
 
-    def random_simulation(self):
-        """Executa a simulacao aleatoria gerando eventos que testam todos os requisitos."""
+    def requirement_simulation(self):
+        """Menu interativo para executar cada requisito funcional."""
         print("\n============================================================")
-        print("         SIMULACAO ALEATORIA")
+        print("         SIMULACAO DOS REQUISITOS FUNCIONAIS")
         print("============================================================")
-        print("Pressione Ctrl+C para encerrar.\n")
-
-        presenca = [sid for sid, info in self.sensor_procs.items() if info["type"] == 0]
-        leitores = [sid for sid, info in self.sensor_procs.items() if info["type"] == 1]
-        chaves   = [sid for sid, info in self.sensor_procs.items() if info["type"] == 2]
-
-        room_empty = True
-        student_idx = 0
-        steps = 0
-
-        while steps < 30:
-            time.sleep(2)
-            steps += 1
-            print(f"\n{'='*60}")
-            print(f"  Passo {steps}/30")
-            print(f"{'='*60}")
-
-            available = []
-            if presenca:
-                available.append("presenca")
-            if leitores:
-                available.append("leitor")
-            if chaves:
-                available.append("chave")
-            if self.has_client:
-                available.append("cliente")
-            available.append("timeout")
-            available.append("shutdown_23h")
-
-            action = random.choice(available)
-
-            if action == "presenca":
-                sid = random.choice(presenca)
-                if room_empty:
-                    self._executar_presenca_detectada(sid)
-                    room_empty = False
-                else:
-                    self._executar_presenca_vazia(sid)
-                    room_empty = True
-
-            elif action == "leitor":
-                sid = random.choice(leitores)
-                nome, nro = STUDENTS[student_idx % len(STUDENTS)]
-                student_idx += 1
-                self._executar_leitor(sid, nome, nro)
-
-            elif action == "chave":
-                sid = random.choice(chaves)
-                estado = random.randint(0, 1)
-                self._executar_chave(sid, estado)
-
-            elif action == "cliente":
-                data = time.strftime("%Y-%m-%d")
-                self._executar_cliente(data)
-
-            elif action == "timeout":
-                self._executar_timeout()
-
-            elif action == "shutdown_23h":
-                self._executar_shutdown_23h()
-
-        print("\n============================================================")
-        print("         SIMULACAO ALEATORIA CONCLUIDA")
-        print("============================================================")
-
-    # ----------------------------------------------------------------
-    # Modo controlado
-    # ----------------------------------------------------------------
-
-    def controlled_simulation(self):
-        """Executa a simulacao controlada com menu interativo."""
-        print("\n============================================================")
-        print("         SIMULACAO CONTROLADA")
-        print("============================================================")
-
-        leitor_idx = {}  # controla qual aluno sera usado em cada leitor
 
         while True:
-            print("\n" + "="*60)
-            print("MENU DE CONTROLE")
-            print("="*60)
+            print()
+            print("  1.  Req 3.2 - Sensor de presenca detecta pessoas na sala")
+            print("  2.  Req 3.3 - Sensor de presenca detecta sala vazia")
+            print("  3.  Req 3.4 - Ligar chave do projetor")
+            print("  4.  Req 3.5 - Desligar chave do projetor")
+            print("  5.  Req 3.6 - Leitor de cartao registra presenca")
+            print("  6.  Req 3.7 - Rotina de encerramento as 23h")
+            print("  7.  Req 3.8 - Cliente requisita lista de presenca")
+            print("  0.  Sair")
+            print()
 
-            menu: list[tuple] = []
-            num = 1
+            try:
+                escolha = int(input("Escolha um requisito: "))
+            except ValueError:
+                print("Entrada invalida.")
+                continue
 
-            for sid, info in self.sensor_procs.items():
-                t = info["type"]
-                nome = info["name"]
+            print()
 
-                if t == 0:
-                    print(f"{num}. Sensor {sid} ({nome}): Detectar pessoas na sala")
-                    menu.append(("presenca_detecta", sid))
-                    num += 1
-                    print(f"{num}. Sensor {sid} ({nome}): Sala vazia")
-                    menu.append(("presenca_vazia", sid))
-                    num += 1
-
-                elif t == 1:
-                    print(f"{num}. Sensor {sid} ({nome}): Registrar presenca de aluno")
-                    menu.append(("leitor", sid))
-                    num += 1
-
-                elif t == 2:
-                    print(f"{num}. Sensor {sid} ({nome}): Ligar chave do projetor")
-                    menu.append(("chave", sid, 1))
-                    num += 1
-                    print(f"{num}. Sensor {sid} ({nome}): Desligar chave do projetor")
-                    menu.append(("chave", sid, 0))
-                    num += 1
-
-            if self.has_client:
-                print(f"{num}. Cliente: Requisitar lista de presenca")
-                menu.append(("cliente",))
-                num += 1
-
-            print(f"{num}. Simular timeout de 15 minutos (sala vazia)")
-            menu.append(("simular_timeout",))
-            num += 1
-
-            print(f"{num}. Simular desligamento das 23h")
-            menu.append(("shutdown_23h",))
-            num += 1
-
-            print(f"{num}. Sair")
-            menu.append(("sair",))
-            num += 1
-
-            escolha = self._input_int(f"\nEscolha uma acao (1-{len(menu)}): ", 1, len(menu))
-            acao = menu[escolha - 1]
-
-            print("\n" + "-"*50)
-
-            if acao[0] == "presenca_detecta":
-                self._executar_presenca_detectada(acao[1])
-
-            elif acao[0] == "presenca_vazia":
-                self._executar_presenca_vazia(acao[1])
-
-            elif acao[0] == "leitor":
-                sid = acao[1]
-                if sid not in leitor_idx:
-                    leitor_idx[sid] = 0
-                idx = leitor_idx[sid]
-                nome, nro = STUDENTS[idx % len(STUDENTS)]
-                leitor_idx[sid] += 1
-
-                nome_input = input(f"Nome do aluno (Enter para '{nome}'): ").strip()
-                nro_input = input(f"Numero do aluno (Enter para '{nro}'): ").strip()
-                nome_final = nome_input if nome_input else nome
-                nro_final = nro_input if nro_input else nro
-                self._executar_leitor(sid, nome_final, nro_final)
-
-            elif acao[0] == "chave":
-                self._executar_chave(acao[1], acao[2])
-
-            elif acao[0] == "cliente":
-                data = input("Data (YYYY-MM-DD) [Enter para hoje]: ").strip()
-                if not data:
-                    data = time.strftime("%Y-%m-%d")
-                self._executar_cliente(data)
-
-            elif acao[0] == "simular_timeout":
-                self._executar_timeout()
-
-            elif acao[0] == "shutdown_23h":
-                self._executar_shutdown_23h()
-
-            elif acao[0] == "sair":
-                print("Encerrando simulacao controlada.")
+            if escolha == 1:
+                self._req_3_2()
+            elif escolha == 2:
+                self._req_3_3()
+            elif escolha == 3:
+                self._req_3_4()
+            elif escolha == 4:
+                self._req_3_5()
+            elif escolha == 5:
+                self._req_3_6()
+            elif escolha == 6:
+                self._req_3_7()
+            elif escolha == 7:
+                self._req_3_8()
+            elif escolha == 0:
+                print("Encerrando simulacao.")
                 break
+            else:
+                print("Opcao invalida.")
+                continue
 
             input("\nPressione Enter para continuar...")
 
@@ -518,18 +579,7 @@ class SalaDeAula:
         try:
             self.setup_interactive()
             self.start_all()
-
-            modo = input(
-                "\nModo de simulacao:\n"
-                "  1. Aleatoria\n"
-                "  2. Controlada\n"
-                "Escolha: "
-            ).strip()
-
-            if modo == "1":
-                self.random_simulation()
-            else:
-                self.controlled_simulation()
+            self.requirement_simulation()
 
         except KeyboardInterrupt:
             print("\n\nSimulacao interrompida pelo usuario.")

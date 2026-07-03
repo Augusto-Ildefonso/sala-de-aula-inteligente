@@ -18,10 +18,12 @@ def to_bytes(data : str) -> bytes:
 
 def parse_payload(payload : str) -> tuple[Header, dict]:
     parse_payload = payload.decode("utf-8").split("|")
+    ip_rem, port_rem = parse_payload[1].rsplit(":", 1)
+    ip_dest, port_dest = parse_payload[2].rsplit(":", 1)
     header = Header(
-        int(parse_payload[0]), 
-        parse_payload[1], 
-        parse_payload[2], 
+        int(parse_payload[0]),
+        (ip_rem, int(port_rem)),
+        (ip_dest, int(port_dest)),
         int(parse_payload[3])
     )
     data : dict

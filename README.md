@@ -15,7 +15,6 @@ Projeto de simulação de uma sala de aula inteligente com sensores, atuadores e
 ├── atuador.py          # Atuador (iluminação, projetor, ar-condicionado)
 ├── cliente.py          # Cliente (professor) — consulta lista de presença
 ├── sala_de_aula.py     # Orquestrador da simulação (modos aleatório e controlado)
-├── Makefile            # Atalhos para execução
 ├── arquitetura.md      # Documentação completa da arquitetura do protocolo
 ├── alteracoes.md       # Divergências entre arquitetura original e implementação
 └── trabalho_pratico_redes.pdf  # Enunciado do trabalho

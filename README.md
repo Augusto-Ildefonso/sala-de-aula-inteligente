@@ -2,6 +2,8 @@
 
 Projeto de simulação de uma sala de aula inteligente com sensores, atuadores e um gerenciador central, comunicando-se via sockets UDP/TCP com protocolo próprio.
 
+O vídeo do projeto está disponível no link: https://youtu.be/P9Tojq7Vdbk ou no arquivo `link video.txt`.
+
 ## Estrutura do Projeto
 
 ```
@@ -108,10 +110,12 @@ Como criamos o arquivo `sala_de_aula.py` para centralizar e simular o nosso proj
 
 Então cada componente é executado de fato em um processo do SO, apenas são criados pelo `sala_de_aula` para facilitar a simulação, e cada processo tem 2 threads: uma UDP e outra TCP.
 
+A única restrição é que é necessário o sistema Linux ou Mac para usar a biblioteca subprocess.
+
 ## Como Executar
 
 ### Pré-requisitos
-- Python 3.8+
+- Python 3.8+ (as bibliotecas utilizadas são todas padrões do python, então elas já vem instaladas e não é necessário instalar elas)
 - Sistema Unix-like (macOS/Linux) — necessário para `subprocess`
 
 ### Executar a simulação completa

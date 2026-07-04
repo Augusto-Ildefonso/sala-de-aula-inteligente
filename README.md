@@ -96,6 +96,18 @@ Fluxo de execução:
    - **Controlado**: menu interativo onde o usuário escolhe cada ação
 4. **Cleanup**: finaliza todos os processos ao encerrar
 
+## Ambiente de Desenvolvimento
+
+- **SO**: macOS 15 (Sequoia)
+- **Python**: 3.13.2
+- **Compilador/Interpretador**: CPython
+- **Terminal**: zsh
+
+## Processos e Threads
+Como criamos o arquivo `sala_de_aula.py` para centralizar e simular o nosso projeto, tivemos que usar a biblioteca subprocess para permitir que criássemos processos individuais para cada componente (sensor, atuador e gerenciador), assim como foi solicitado.
+
+Então cada componente é executado de fato em um processo do SO, apenas são criados pelo `sala_de_aula` para facilitar a simulação, e cada processo tem 2 threads: uma UDP e outra TCP.
+
 ## Como Executar
 
 ### Pré-requisitos

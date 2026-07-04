@@ -147,10 +147,6 @@ class SalaDeAula:
             except ValueError:
                 print("Entrada invalida.")
 
-    # ----------------------------------------------------------------
-    # Configuracao
-    # ----------------------------------------------------------------
-
     def setup_interactive(self):
         """Questionario interativo para configurar os componentes."""
         print("\n============================================================")
@@ -184,10 +180,6 @@ class SalaDeAula:
             print(f"  Atuador: {aid} ({an})")
         print(f"  Cliente: {'sim' if self.has_client else 'nao'}")
         print("------------------------------------------------------------")
-
-    # ----------------------------------------------------------------
-    # Inicializacao dos componentes
-    # ----------------------------------------------------------------
 
     def start_all(self):
         """Inicia todos os componentes em processos separados."""
@@ -272,19 +264,11 @@ class SalaDeAula:
 
         print("Todos os componentes finalizados.")
 
-    # ----------------------------------------------------------------
-    # Utilitarios para acoes
-    # ----------------------------------------------------------------
-
     def _send_sensor(self, sid: str, data: dict):
         """Envia comando de dados para um sensor."""
         self.sensor_procs[sid]["queue"].put({
             "action": "send_data", "data": data,
         })
-
-    # ----------------------------------------------------------------
-    # Utilitarios de requisitos
-    # ----------------------------------------------------------------
 
     def _find_sensors(self, sensor_type: int) -> list[str]:
         return [sid for sid, info in self.sensor_procs.items() if info["type"] == sensor_type]
@@ -331,10 +315,6 @@ class SalaDeAula:
 
     def _estado_str(self, state: int) -> str:
         return "ligado" if state else "desligado"
-
-    # ----------------------------------------------------------------
-    # Simulacao dos Requisitos
-    # ----------------------------------------------------------------
 
     def _req_3_2(self):
         print("\n" + "="*60)
@@ -517,10 +497,6 @@ class SalaDeAula:
         print(f"\n[Cliente] Requisitou lista de presenca para {data}")
         time.sleep(0.5)
 
-    # ----------------------------------------------------------------
-    # Menu de Requisitos
-    # ----------------------------------------------------------------
-
     def requirement_simulation(self):
         """Menu interativo para executar cada requisito funcional."""
         print("\n============================================================")
@@ -569,10 +545,6 @@ class SalaDeAula:
                 continue
 
             input("\nPressione Enter para continuar...")
-
-    # ----------------------------------------------------------------
-    # Ponto de entrada
-    # ----------------------------------------------------------------
 
     def run(self):
         """Ponto de entrada: configura, inicializa e executa a simulacao."""

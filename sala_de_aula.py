@@ -264,7 +264,7 @@ class SalaDeAula:
 
         print("Todos os componentes finalizados.")
 
-    def _send_sensor(self, sid: str, data: dict):
+    def _trigger_sensor(self, sid: str, data: dict):
         """Envia comando de dados para um sensor."""
         self.sensor_procs[sid]["queue"].put({
             "action": "send_data", "data": data,
@@ -335,7 +335,7 @@ class SalaDeAula:
 
         for sid in sensors:
             print(f"[Sensor de Presenca] Detectou pessoas na sala")
-            self._send_sensor(sid, {"EMPTY": 0})
+            self._trigger_sensor(sid, {"EMPTY": 0})
             time.sleep(0.5)
         time.sleep(2)
 
@@ -361,7 +361,7 @@ class SalaDeAula:
 
         for sid in sensors:
             print(f"[Sensor de Presenca] Sala vazia")
-            self._send_sensor(sid, {"EMPTY": 1})
+            self._trigger_sensor(sid, {"EMPTY": 1})
             time.sleep(0.5)
         print("[Sala] Aguardando timer de desligamento...")
         time.sleep(6)
@@ -385,7 +385,7 @@ class SalaDeAula:
 
         for sid in sensors:
             print(f"[Chave do Projetor] Ligou a chave")
-            self._send_sensor(sid, {"STATUS": 1})
+            self._trigger_sensor(sid, {"STATUS": 1})
             time.sleep(0.5)
         time.sleep(2)
 
@@ -408,7 +408,7 @@ class SalaDeAula:
 
         for sid in sensors:
             print(f"[Chave do Projetor] Desligou a chave")
-            self._send_sensor(sid, {"STATUS": 0})
+            self._trigger_sensor(sid, {"STATUS": 0})
             time.sleep(0.5)
         time.sleep(2)
 
@@ -443,7 +443,7 @@ class SalaDeAula:
         nro_final = nro_input if nro_input else nro
 
         for sid in sensors:
-            self._send_sensor(sid, {"NROALUNO": nro_final, "NOME": nome_final})
+            self._trigger_sensor(sid, {"NROALUNO": nro_final, "NOME": nome_final})
             print(f"\n[Leitor de Cartao] Aluno {nome_final} ({nro_final}) bateu o cartao")
             time.sleep(0.5)
 

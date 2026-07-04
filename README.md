@@ -4,6 +4,8 @@ Projeto de simulação de uma sala de aula inteligente com sensores, atuadores e
 
 O vídeo do projeto está disponível no link: https://youtu.be/P9Tojq7Vdbk ou no arquivo `link video.txt`.
 
+Link para o repositório: https://github.com/Augusto-Ildefonso/sala-de-aula-inteligente
+
 ## Estrutura do Projeto
 
 ```
